@@ -8,7 +8,11 @@ if( !class_exists("ServerStatus") ){
 
   class ServerStatus {
 
-    function __construct() {}
+    public string $os;
+
+    function __construct() {
+      $this->os = PHP_OS;
+    }
 
     public function init(){
       try {
@@ -32,7 +36,7 @@ if( !class_exists("ServerStatus") ){
     public function uptimeContent() {
       $content = '';
       //uptime
-      $uptime = shell_exec('uptime');
+      $uptime = $this->uptimeOutput();
       if(!empty($uptime)) {
         $content =  '<h2>Uptime</h2>';
         $content .= '<pre id="uptime-content">'.$uptime.'</pre>';
@@ -40,10 +44,16 @@ if( !class_exists("ServerStatus") ){
       return $content;
     }
 
+    private function uptimeOutput() {
+      $uptime = '';
+      $uptime = shell_exec('uptime');
+      return $uptime;
+    }
+
     public function diskSpaceContent() {
       $content = '';
       //cpu temp
-      $disc_space = shell_exec('df -h -T');
+      $disc_space = $this->diskSpaceOutput();
       if(!empty($disc_space)) {
         $content =  '<h2>Disk space</h2>';
         $content .= '<pre id="disk-space-content">'.$disc_space.'</pre>';
@@ -51,10 +61,16 @@ if( !class_exists("ServerStatus") ){
       return $content;
     }
 
+    private function diskSpaceOutput() {
+      $disc_space = '';
+      $disc_space = shell_exec('df -h -T');
+      return $disc_space;
+    }
+
     public function cpuTempContent() {
       $content = '';
       //disc space
-      $cpu_temp = shell_exec('sysctl dev.cpu | grep temperature');
+      $cpu_temp = $this->cpuTempOutput();
       if(!empty($cpu_temp)) {
         $content =  '<h2>CPU Temp</h2>';
         $content .= '<pre id="cpu-temp-content">'.$cpu_temp.'</pre>';
@@ -62,10 +78,23 @@ if( !class_exists("ServerStatus") ){
       return $content;
     }
 
-    public function topContent($n = 20) {
+    private function cpuTempOutput() {
+      $cpu_temp = '';
+      switch($this->os) {
+        case 'FreeBSD':
+          $cpu_temp = shell_exec('sysctl dev.cpu | grep temperature');
+          break;
+        case 'Linux':
+          $cpu_temp = shell_exec("paste <(cat /sys/class/thermal/thermal_zone*/type) <(cat /sys/class/thermal/thermal_zone*/temp) | column -s $'\t' -t | sed 's/\(.\)..$/.\1°C/'");
+          break;
+      }
+      return $cpu_temp;
+    }
+
+    public function topContent() {
       $content = '';
       //top
-      $top = shell_exec('top -n '.$n);
+      $top = $this->topOutput();
       if(!empty($top)) {
         $content =  '<h2>Processes</h2>';
         $content .= '<pre id="top-content">'.$top.'</pre>';
@@ -73,16 +102,32 @@ if( !class_exists("ServerStatus") ){
       return $content;
     }
 
+    private function topOutput($n = 20) {
+      $top = '';
+      switch($this->os) {
+        case 'FreeBSD':
+          $top = shell_exec('top -n '.$n);
+          break;
+        case 'Linux':
+          ob_start();
+          passthru('/usr/bin/top -b -n 1|head -n '.($n+7));
+          $top = ob_get_clean();
+          ob_clean();
+          break;
+      }
+      return $top;
+    }
+
     function doAjax() {
       $content = '';
       if(!empty($_REQUEST['ajax'])) {
         switch ($_REQUEST['param']) {
           case 'cpu_temp':
-            $content = shell_exec('sysctl dev.cpu | grep temperature');
+            $content = $this->cpuTempOutput();
             break;
 
           case 'top':
-            $content = shell_exec('top -n 20');
+            $content = $this->topOutput();
             break;
           
           default:
@@ -135,4 +180,3 @@ if( !class_exists("ServerStatus") ){
 
   (new ServerStatus())->init();
 }
-
